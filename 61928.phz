@@ -1,0 +1,285 @@
+/*
+	Thyme code for maze generation by @tatt61880
+	This code works well with Phun/Algodoo
+	 * Phun v5.28
+	 * Algodoo v2.0.2 b14
+
+	Inspired by >>357 ( http://anago.2ch.net/test/read.cgi/game/1321774284/357 )
+	Special thanks: 
+		* Kilinich
+			: xFor function
+		* Ishida So
+			: Introduce of maze generation algorithm
+*/
+
+App.Background.drawClouds = false;
+// Scene.Camera.zoom = System.resolution(1) / 1.5;
+
+Scene.addBox {
+	geomID := 1;
+	size := [1, 1];
+	pos := [0, 0];
+	text := "Maze generation script v2.1\n" +
+	        "coded by Tatt (@tatt61880)\n" +
+	        "\n" +
+	        "Maze size(row):\n" +
+	        "\te.this.friction\n" +
+	        "\n" +
+	        "Maze size(col):\n" + 
+	        "\te.this.restitution";
+	textScale := 0.08;
+	color := [0, 0, 1, 1];
+// Parameters {{{1
+	// Maze index {{{2
+	friction    := 4; // Width
+	restitution := 4; // Height
+	//}}}2
+	onCollide := (e)=>{
+
+	// Maze scale {{{2
+		STREET_WIDTH    := 5.0;
+		WALL_THICKNESS  := 1.0;
+	//}}}2
+
+	// Box info {{{2
+
+		BOX_COLOR  := [0, 0.25, 0.5, 0.75];
+		DRAW_BORDER := false;
+
+		FRICTION := 0.5;
+		RESTITUTION := 0.5;
+
+		COLLIDE_SET := 1;
+		COLLIDE_WATER := true;
+		HETERO_COLLIDE := false;
+	//}}}2
+	// Scene Settings {{{2
+		App.Background.skyColor = [0, 0, 0, 1];
+		App.Background.drawClouds = false;
+		Sim.gravitySwitch = false;
+	//}}}2
+//}}}1
+
+//=============================================================================
+// Improved Kilinich's xFor function. {{{1
+// xFor:
+// 	http://www.algodoo.com/forum/viewtopic.php?f=13&t=5146&p=54364&hilit=xFor#p54364
+// * FIXED: Negative value issue. 
+// 	*          xFor(-2, 0, (n)=>{n}) ... "Stack overflow!"
+// 	* xFor_improved(-2, 0, (n)=>{n}) ... -2, -1,  0
+// * FIXED: Larger to lower issue.
+// 	*          xFor( 2, 0, (n)=>{n}) ...  2
+// 	* xFor_improved( 2, 0, (n)=>{n}) ...  2,  1,  0
+		xFor_improved = (n1, n2, code)=>{
+			(n1 % 1 != 0 || n2 % 1 != 0) ? {
+				print("n1: " + n1 + "\n");
+				print("n2: " + n2 + "\n");
+				print("ERROR - Usage: Scene.my.xFor_improved(int, int, func)")
+			} : {
+				(n1 == n2) ? {
+					code(n1)
+				} : {
+					m := ((n1 + n2) % 2 == 0) ? 
+						 {(n1 + n2) / 2} : 
+						 {(n1 + n2 - 1) / 2}; // (n1, n2) = (-2, -1) => m = -2
+					(n2 > n1) ? {
+						xFor_improved( n1,   m, code);
+						xFor_improved(m+1,  n2, code)
+					} : {
+						xFor_improved( n1, m+1, code);
+						xFor_improved(  m,  n2, code)
+					}
+				}
+			}
+		};
+//}}}1
+
+//=============================================================================
+		ROW := e.this.friction    - e.this.friction    % 1; // Width
+		COL := e.this.restitution - e.this.restitution % 1; // Height
+		HALF_ROW := ((ROW % 2) == 0) ? {ROW / 2} : {(ROW + 1) / 2};
+		HALF_COL := ((COL % 2) == 0) ? {COL / 2} : {(COL + 1) / 2};
+		
+		TOP_INDEX    := COL - HALF_COL;
+		BOTTOM_INDEX :=     - HALF_COL;
+		LEFT_INDEX   :=     - HALF_ROW;
+		RIGHT_INDEX  := ROW - HALF_ROW;
+		
+		INTERVAL := STREET_WIDTH + WALL_THICKNESS;
+		
+//=============================================================================
+// Maze generation algorythm: {{{1
+// http://www5d.biglobe.ne.jp/~stssk/maze/make.html
+
+		// Enable to place a stick to left
+		isLeftEmpty := true;
+
+		// Template: Stick {{{2
+		addStick := (row_col__, lengthFactor__, angle__) => {
+			Scene.addBox{
+				body := 0;
+				immortal := true;
+
+				pos := row_col__ * INTERVAL;
+				size := [lengthFactor__ * INTERVAL + WALL_THICKNESS, WALL_THICKNESS];
+				angle := angle__;
+
+				color := BOX_COLOR;
+				drawBorder := DRAW_BORDER;
+
+				friction := FRICTION;
+				restitution := RESTITUTION;
+
+				collideSet := COLLIDE_SET;
+				collideWater := COLLIDE_WATER;
+				heteroCollide := HETERO_COLLIDE;
+			}
+		};
+	//}}}2
+
+	// Sticks {{{2
+		addStick_U := (row, col)=>{
+			isLeftEmpty = true;
+			addStick([row, (2 * col + 1) / 2.0], 1, math.pi / 2);
+		};
+		addStick_D := (row, col)=>{
+			isLeftEmpty = true;
+			addStick([row, (2 * col - 1) / 2.0], 1, math.pi / 2);
+		};
+		addStick_L := (row, col)=>{
+			isLeftEmpty = true;
+			addStick([(2 * row - 1) / 2.0, col], 1, 0);
+		};
+		addStick_R := (row, col)=>{
+			isLeftEmpty = (row == (RIGHT_INDEX - 1)) ? {true} : {false};
+			addStick([(2 * row + 1) / 2.0, col], 1, 0);
+		};
+	//}}}2
+
+		RAND1__ := 61880 * System.time;
+		RAND2__ := 20120408 * System.time;
+		TEMP := 0;
+		RAND := ()=>{
+			RAND1__ = (RAND1__ * 1357924681 + 13579) / RAND2__ % 12345;
+			TEMP__ = RAND1__;
+			RAND1__ = RAND2__;
+			RAND2__ = TEMP__;
+			RAND1__ - RAND1__ % 1;
+		};
+
+	// 1st layer {{{2
+		// Up, Down, Left or Right
+		UDLR := (row, col)=>{
+			directinIndex := RAND % 4;
+			directinIndex < 1 ? { addStick_U(row, col); } : {
+			directinIndex < 2 ? { addStick_D(row, col); } : {
+			directinIndex < 3 ? { addStick_L(row, col); } : {
+			                      addStick_R(row, col);
+			}}}
+		};
+		// Up, Down, ____ or Right
+		UD_R := (row, col)=>{
+			directinIndex := RAND % 3;
+			directinIndex < 1 ? { addStick_U(row, col); } : {
+			directinIndex < 2 ? { addStick_D(row, col); } : {
+			                      addStick_R(row, col);
+			}}
+		};
+	//}}}2
+
+	// Other layers {{{2
+		// __, Down, Left or Right
+		_DLR := (row, col)=>{
+			directinIndex := RAND % 3;
+			directinIndex < 1 ? { addStick_D(row, col); } : {
+			directinIndex < 2 ? { addStick_L(row, col); } : {
+			                      addStick_R(row, col);
+			}}
+		};
+		// __, Down, ____ or Right
+		_D_R := (row, col)=>{
+			directinIndex := RAND % 2;
+			directinIndex < 1 ? { addStick_D(row, col); } : {
+			                      addStick_R(row, col);
+			}
+		};
+	//}}}2
+		
+	// Outside frame {{{2
+		addStick([(LEFT_INDEX + RIGHT_INDEX + 1) / 2.0,    TOP_INDEX], ROW - 1,           0); // Top
+		addStick([(LEFT_INDEX + RIGHT_INDEX - 1) / 2.0, BOTTOM_INDEX], ROW - 1,           0); // Bottom
+		addStick([ LEFT_INDEX,   (TOP_INDEX + BOTTOM_INDEX) / 2.0   ], COL    , math.pi / 2); // Left
+		addStick([RIGHT_INDEX,   (TOP_INDEX + BOTTOM_INDEX) / 2.0   ], COL    , math.pi / 2); // Right
+	//}}}2
+
+	// Inside of frame {{{2
+		xFor_improved(BOTTOM_INDEX + 1, TOP_INDEX - 1, (col)=>{
+			xFor_improved(LEFT_INDEX + 1, RIGHT_INDEX - 1, (row)=>{
+				// print("(x, y) = (" + row + ", " + col + ")");
+				// ^ For Debug
+				(col == (TOP_INDEX - 1)) ? { // 1st layer
+					isLeftEmpty ? {
+						UDLR(row, col);
+					} : {
+						UD_R(row, col);
+					}
+				} : { // Other layers
+					isLeftEmpty ? {
+						_DLR(row, col);
+					} : {
+						_D_R(row, col);
+					}
+				}
+			});
+		});
+	//}}}2
+//}}}1
+		addTriangle := (row, col)=> {
+			Scene.addPolygon{
+				pos := [row, col] * INTERVAL;
+				surfaces := [[[0, 0], [0.35, 0.35], [-0.35, 0.35]]] * INTERVAL;
+				color := [1.0, 1.0, 0.25, 1.0];
+				collideSet := 0;
+				collideWater := false;
+			}
+		};
+		
+		addTriangle( LEFT_INDEX + 0.5,    TOP_INDEX + 0.4); // START
+		addTriangle(RIGHT_INDEX - 0.5, BOTTOM_INDEX - 0.3); // GOAL
+		
+		
+		Scene.Camera.zoom = (((System.resolution(0) / ROW) > (System.resolution(1) / COL)) ? {
+			(System.resolution(1) / (COL * 2.0));
+		} : {
+			(System.resolution(0) / (ROW * 1.5));
+		}) / INTERVAL;
+		SPH.geometryFields ? { // Algodoo ?
+			Tools.DragTool.strength = 10^5;
+		} : { // Phun
+		};
+		
+		e.this.killer = true;
+		e.other.killer = true;
+		e.this.onCollide = (e)=>{};
+	};
+};
+
+Scene.addPlane {
+	geomID := 2;
+	pos := [0, -0.55];
+	color := [0, 0.4 , 0, 0.5];
+	angle := math.pi / 2;
+};
+
+// They have to collide with each other twice to remove themselves...
+Scene.addSpring {
+	geom1 := 1;
+	geom1pos := [0, -0.45];
+	geom0 := 0; // World
+	geom0pos := [0, -0.60];
+	opaqueBorders := true;
+	size := 0.1;
+	color := [0, 0, 0, 1];
+	length := 0;
+	constant := 1000;	
+}

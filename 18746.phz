@@ -1,0 +1,939 @@
+/** Phun scene created by Phun v5.28
+ *
+ *  @author tatt61880
+ *  @date   2009/05/07
+ */
+
+/* ============================================================= */
+/* KEY CONFIG */
+Scene.my.FORCE_CONTROLLER_ACC := "keys * right down left";
+Scene.my.BUTTON_BACK    := "z";   // ccw
+Scene.my.BUTTON_FORWARD := "x";   // cw
+
+/* GAME SETTING */
+Scene.my.LINES_PER_LEVEL := 5;
+Scene.my.INITIAL_GRAVITY := 9.8;
+Scene.my.MAX_ROW := 10;        //Default :20
+Scene.my.MAX_COL := 6;         //Default :10
+Scene.my.BLOCKSIZE := 0.25;    //Default :0.25[m] NOTE: int is not acceptable. input float.  ex: 1.0 is ok, 1 is NG. 
+Scene.my.circleBlock := true;  // "circleBlock := true" == easy
+Scene.my.airSwitch := true;    //"airSwitch = false" == very hard
+Scene.my.DISABLE_TO_MOVE_TIME_INTERBAL := 0.3;
+/* ============================================================= */
+
+/* Phun scene setting */
+FileInfo -> {
+	title = "TETRIS";
+	author = "tatt61880";
+	description = "ccw: " + Scene.my.BUTTON_BACK +
+		"\ncw: " + Scene.my.BUTTON_FORWARD;
+	version = 4;
+};
+Sim -> {
+	gravityAngleOffset = 0.0;
+	gravityStrength = Scene.my.INITIAL_GRAVITY;
+	gravitySwitch = true;
+	airSwitch = Scene.my.airSwitch;
+	airFrictionMultiplier = 1.0;
+	airFrictionLinear = 0.01;
+	airFrictionQuadratic = 0.0;
+	rotFrictionLinear = 0.00314;
+	airDensity = 0.01;
+	timeFactor = 1.0; //Sim-speed
+};
+App -> {
+	waterColor = [0.1, 0.1, 1.0, 0.7];
+	fadeColor = [0.0, 0.0, 0.0]
+};
+Scene.Camera -> {
+	pan = [0.0, - (Scene.my.MAX_ROW - 2) / 2] * Scene.my.BLOCKSIZE;
+	rotation = 0.0;
+	trackRotation = false;
+	zoom = 25.0 / (Scene.my.BLOCKSIZE * (Scene.my.MAX_ROW + 3) / 20.0) / GUI.scale * System.resolution(1) / 784.0 ;
+};
+App.Background -> {
+	cloudOpacity = 0.9;
+	drawClouds = false;
+	skyColor = [0.75, 0.75, 1.0, 1.0]
+};
+Scene -> {gravityRotationOffset = NaN};
+
+/* Debug */
+Scene.my.DEBUG := false;
+Scene.my.FIXJOINT_COLOR := [0, 0, 0, 0];
+Scene.my.TIMINGBALL_COLOR := [0, 0, 0, 0];
+Scene.my.CHECKINGBALL_COLOR := [0, 0, 0, 0];
+Scene.my.COLOR_FOR_IS_LANDED := [0, 0, 0, 0];
+
+Scene.my.FALL_TIMELIMIT := 100.0;
+Scene.my.CHECKINGBALL_SIZE := 0.000001;
+Scene.my.REMOVEBLOCKSIZE := [Scene.my.MAX_COL, 0.0001] * Scene.my.BLOCKSIZE;
+
+Scene.my.DEBUG ? {
+	Scene.my.FIXJOINT_COLOR = [0, 0, 0, 0.5];
+	Scene.my.TIMINGBALL_COLOR = [0, 0, 0, 1.0];
+	Scene.my.CHECKINGBALL_COLOR = [1, 0, 0, 1];
+	Scene.my.COLOR_FOR_IS_LANDED = [1, 0, 0, 1];
+
+	Scene.my.FALL_TIMELIMIT = 100.0;
+	Scene.my.CHECKINGBALL_SIZE = Scene.my.BLOCKSIZE / 32;
+	Scene.my.REMOVEBLOCKSIZE = [Scene.my.MAX_COL, 1.0 / 4] * Scene.my.BLOCKSIZE;
+} : {
+};
+
+/* MACROs */
+Scene.my.BLOCK_RESTITUTION = 0.1;
+Scene.my.FRICTION = 0.025 / Scene.my.BLOCKSIZE;
+Scene.my.CONTROLLER_ACC = 200 * Scene.my.BLOCKSIZE;
+Scene.my.DENSITY_FOR_CONTROL := 0.005; // < Air-density (0.01) //Default: 0.005
+Scene.my.DENSITY_FOR_BLOCKS := Scene.my.circleBlock ? {0.02} : {0.02};   // > Air-density (0.01) //Default: {0.3} : {0.02
+Scene.my.CHECKINGINTERVAL := 0.3 / Scene.my.MAX_ROW;
+
+Scene.my.CHECKINGBALL_DENSITY := 0.000001;
+Scene.my.LANDBALL_DENSITY := 0.0000000000000000000001;
+Scene.my.DISABLE_TO_MOVE_DENSITY := 0.00000000000000000001;
+Scene.my.LANDBALL_RADIUS := 2.0 * Scene.my.BLOCKSIZE;
+Scene.my.DISABLE_TO_MOVE_SIZE := [Scene.my.MAX_COL, Scene.my.MAX_ROW ] * Scene.my.BLOCKSIZE * 2;
+Scene.my.MOTOR_SPEED := (2 * math.pi) * 4; //4rps = 240rpm
+Scene.my.FLOOR_COLOR := [0.5, 0.5, 0.5, 1];
+Scene.my.GAP_FOR_WIDTH := 0.06;
+
+Scene.my.POS00 := Scene.my.BLOCKSIZE * [-1.5, 2];
+Scene.my.POS01 := Scene.my.BLOCKSIZE * [-0.5, 2];
+Scene.my.POS02 := Scene.my.BLOCKSIZE * [ 0.5, 2];
+Scene.my.POS03 := Scene.my.BLOCKSIZE * [ 1.5, 2];
+Scene.my.POS10 := Scene.my.BLOCKSIZE * [-1.5, 1];
+Scene.my.POS11 := Scene.my.BLOCKSIZE * [-0.5, 1];
+Scene.my.POS12 := Scene.my.BLOCKSIZE * [ 0.5, 1];
+Scene.my.POS13 := Scene.my.BLOCKSIZE * [ 1.5, 1];
+
+Scene.my.DEFAULT_G            :=  1;   //Group-A
+Scene.my.FALLING_BLOCKS_G     :=  2;   //Group-B
+Scene.my.EMPTYBLOCK_G         :=  4;   //Group-C
+Scene.my.CONTROLLER_G         :=  8;   //Group-D
+Scene.my.BACKGROUND_KILLER1_G := 16;   //Group-E
+Scene.my.BACKGROUND_KILLER2_G := 32;   //Group-F
+Scene.my.SHOWING_LEVEL_G      := 64;   //Group-G
+Scene.my.CHECKER_COLLIDESET := Scene.my.DEFAULT_G + Scene.my.BACKGROUND_KILLER1_G;
+Scene.my.disableToMove_COLLIDESET := Scene.my.FALLING_BLOCKS_G + Scene.my.EMPTYBLOCK_G + Scene.my.CONTROLLER_G + Scene.my.BACKGROUND_KILLER2_G;
+
+Scene.my.COLOR_OF_TETRIS_I := [1,   0,   0, 1]; //red
+Scene.my.COLOR_OF_TETRIS_O := [1,   1,   0, 1]; //yellow
+Scene.my.COLOR_OF_TETRIS_S := [1, 0.5, 0.5, 1]; //pink
+Scene.my.COLOR_OF_TETRIS_Z := [0,   1,   0, 1]; //green
+Scene.my.COLOR_OF_TETRIS_J := [0,   0,   1, 1]; //blue
+Scene.my.COLOR_OF_TETRIS_L := [1, 0.5,   0, 1]; //orange
+Scene.my.COLOR_OF_TETRIS_T := [0,   1,   1, 1]; //blue-green
+
+/* Layer */
+Scene.setFilter {
+	rest = true;
+	mask = Scene.my.DEBUG ? {
+		127 - Scene.my.BACKGROUND_KILLER1_G - Scene.my.BACKGROUND_KILLER2_G;
+	} : {
+		127 - Scene.my.BACKGROUND_KILLER1_G - Scene.my.BACKGROUND_KILLER2_G - Scene.my.CONTROLLER_G;
+	};
+};
+
+/* my objects */
+Scene.my.addBlock := (id__, pos__, color__, isNotEmpty__)=>{
+	Scene.my.circleBlock ? {
+		Scene.addCircle({
+			geomID = id__;
+			body = Scene.my.nextBodyID;
+			
+			radius = Scene.my.BLOCKSIZE / 2; //
+			color = isNotEmpty__ ? {color__} : {[0, 0, 0, 0]};
+			opaqueBorders = isNotEmpty__;
+			drawBorder = isNotEmpty__;
+			
+			pos = pos__;
+			vel = [0.0, 0.0];
+			angle = 0.0;
+			angvel = 0.0;
+			
+			density = Scene.my.DENSITY_FOR_BLOCKS;
+			restitution = Scene.my.BLOCK_RESTITUTION;
+			friction = Scene.my.FRICTION;
+			
+			collideSet = isNotEmpty__ ? {Scene.my.FALLING_BLOCKS_G} : {Scene.my.EMPTYBLOCK_G};
+			collideWater = false;
+			heteroCollide = ! isNotEmpty__;
+			
+			isNotEmpty__ ? {} : {zDepth = 1.0};
+			onCollide = isNotEmpty__ ? {Scene.my.isLanded} : {(e)=>{e.this.collideSet = Scene.my.BACKGROUND_KILLER2_G}};
+		});
+	} : {
+		Scene.addBox({
+			geomID = id__;
+			body = Scene.my.nextBodyID;
+			
+			size = [Scene.my.BLOCKSIZE, Scene.my.BLOCKSIZE]; //
+			color = isNotEmpty__ ? {color__} : {[0, 0, 0, 0]};
+			opaqueBorders = isNotEmpty__;
+			drawBorder = isNotEmpty__;
+			
+			pos = pos__;
+			vel = [0.0, 0.0];
+			angle = 0.0;
+			angvel = 0.0;
+			
+			density = Scene.my.DENSITY_FOR_BLOCKS;
+			restitution = Scene.my.BLOCK_RESTITUTION;
+			friction = Scene.my.FRICTION;
+			
+			collideSet = isNotEmpty__ ? {Scene.my.FALLING_BLOCKS_G} : {Scene.my.EMPTYBLOCK_G};
+			collideWater = false;
+			heteroCollide = ! isNotEmpty__;
+			
+			isNotEmpty__ ? {} : {zDepth = 1.0};
+			onCollide = isNotEmpty__ ? {Scene.my.isLanded} : {(e)=>{e.this.collideSet = Scene.my.BACKGROUND_KILLER2_G}};
+		});
+	}
+};
+Scene.my.addController := (geomID__, size__, pos__)=>{
+	Scene.addBox({
+		geomID = geomID__;
+		
+		controllerAcc = Scene.my.CONTROLLER_ACC;
+		forceController = Scene.my.FORCE_CONTROLLER_ACC;
+		
+		size = size__;
+		color = [0.0, 0.0, 1.0, 0.0];
+		drawBorder = false;
+		opaqueBorders = false;
+		
+		pos = pos__;
+		vel = [0.0, 0.0];
+		angle = 0.0;
+		angvel = 0.0;
+		
+		density = Scene.my.DENSITY_FOR_CONTROL;
+		friction = Scene.my.FRICTION;
+		
+		immortal = true;
+		collideSet = Scene.my.CONTROLLER_G;
+		collideWater = false;
+		heteroCollide = true;
+		
+		onCollide = Scene.my.disableToMove;
+	});
+};
+Scene.my.addHinge := (geom0__, geom1__, geom0pos__, geom1pos__)=>{
+	Scene.addHinge({
+		geom0 = geom0__;
+		geom1 = geom1__;
+		geom0pos = geom0pos__;
+		geom1pos = geom1pos__;
+		
+		size = 0.05;
+		color = [0.3, 0.0, 0.75, 1.0];
+		
+		motorTorque = +inf;
+		autoBrake = true;
+		motorSpeed = Scene.my.MOTOR_SPEED;
+		buttonForward = Scene.my.BUTTON_FORWARD;
+		buttonBack = Scene.my.BUTTON_BACK;
+	});
+};
+Scene.my.addFixjoint := (geom0__, geom1__)=>{
+	Scene.addFixjoint({
+		geom0 = geom0__;
+		geom1 = geom1__;
+		geom0pos = [0.0, 0.0];
+		geom1pos = [0.0, 0.0];
+		color = Scene.my.FIXJOINT_COLOR;
+	});
+};
+
+/* Geometries */
+Scene.my.tetris0 := { //I-type
+	Scene.my.addBlock(1, Scene.my.POS10, Scene.my.COLOR_OF_TETRIS_I, true);
+	Scene.my.addBlock(2, Scene.my.POS11, Scene.my.COLOR_OF_TETRIS_I, true);
+	Scene.my.addBlock(3, Scene.my.POS12, Scene.my.COLOR_OF_TETRIS_I, true);
+	Scene.my.addBlock(4, Scene.my.POS13, Scene.my.COLOR_OF_TETRIS_I, true);
+	Scene.my.addController(5, Scene.my.BLOCKSIZE * [4, 1], (Scene.my.POS11 + Scene.my.POS12) / 2);
+	
+	Scene.my.addHinge(2, 5, [Scene.my.BLOCKSIZE / 2, 0.0], [0.0, 0.0]);
+	Scene.my.addFixjoint(1, 2);
+	Scene.my.addFixjoint(2, 3);
+	Scene.my.addFixjoint(3, 4);
+	
+	Scene.my.nextBodyID = Scene.my.nextBodyID + 1;
+};
+Scene.my.tetris1 := { //O-type
+	Scene.my.addBlock(1, Scene.my.POS01, Scene.my.COLOR_OF_TETRIS_O, true);
+	Scene.my.addBlock(2, Scene.my.POS02, Scene.my.COLOR_OF_TETRIS_O, true);
+	Scene.my.addBlock(3, Scene.my.POS11, Scene.my.COLOR_OF_TETRIS_O, true);
+	Scene.my.addBlock(4, Scene.my.POS12, Scene.my.COLOR_OF_TETRIS_O, true);
+	Scene.my.addController(5, Scene.my.BLOCKSIZE * [2, 2], (Scene.my.POS01 + Scene.my.POS12) / 2);
+
+	Scene.my.addHinge(1, 5, [Scene.my.BLOCKSIZE / 2,  - Scene.my.BLOCKSIZE / 2], [0.0, 0.0]);
+	Scene.my.addFixjoint(1, 2);
+	Scene.my.addFixjoint(1, 3);
+	Scene.my.addFixjoint(2, 4);
+	Scene.my.addFixjoint(3, 4);
+	
+	Scene.my.nextBodyID = Scene.my.nextBodyID + 1;
+};
+Scene.my.tetris2 := { //S-type
+	Scene.my.addBlock(1, Scene.my.POS00, Scene.my.COLOR_OF_TETRIS_S, false);
+	Scene.my.addBlock(2, Scene.my.POS01, Scene.my.COLOR_OF_TETRIS_S, true);
+	Scene.my.addBlock(3, Scene.my.POS02, Scene.my.COLOR_OF_TETRIS_S, true);
+	Scene.my.addBlock(4, Scene.my.POS10, Scene.my.COLOR_OF_TETRIS_S, true);
+	Scene.my.addBlock(5, Scene.my.POS11, Scene.my.COLOR_OF_TETRIS_S, true);
+	Scene.my.addBlock(6, Scene.my.POS12, Scene.my.COLOR_OF_TETRIS_S, false);
+	Scene.my.addController(7, Scene.my.BLOCKSIZE * [3, 2], (Scene.my.POS01 + Scene.my.POS11)/2);
+	
+	Scene.my.addHinge(2, 7, [0.0, - Scene.my.BLOCKSIZE / 2], [0.0, 0.0]);
+	Scene.my.addFixjoint(2, 3);
+	Scene.my.addFixjoint(2, 5);
+	Scene.my.addFixjoint(4, 5);
+	Scene.my.addFixjoint(1, 4);
+	Scene.my.addFixjoint(3, 6);
+	
+	Scene.my.nextBodyID = Scene.my.nextBodyID + 1
+};
+Scene.my.tetris3 := { //Z-Type
+	Scene.my.addBlock(1, Scene.my.POS00, Scene.my.COLOR_OF_TETRIS_Z, true);
+	Scene.my.addBlock(2, Scene.my.POS01, Scene.my.COLOR_OF_TETRIS_Z, true);
+	Scene.my.addBlock(3, Scene.my.POS02, Scene.my.COLOR_OF_TETRIS_Z, false);
+	Scene.my.addBlock(4, Scene.my.POS10, Scene.my.COLOR_OF_TETRIS_Z, false);
+	Scene.my.addBlock(5, Scene.my.POS11, Scene.my.COLOR_OF_TETRIS_Z, true);
+	Scene.my.addBlock(6, Scene.my.POS12, Scene.my.COLOR_OF_TETRIS_Z, true);
+	Scene.my.addController(7, Scene.my.BLOCKSIZE * [3, 2], (Scene.my.POS01 + Scene.my.POS11)/2);
+	
+	Scene.my.addHinge(2, 7, [0.0, - Scene.my.BLOCKSIZE / 2], [0.0, 0.0]);
+	Scene.my.addFixjoint(1, 2);
+	Scene.my.addFixjoint(2, 5);
+	Scene.my.addFixjoint(5, 6);
+	Scene.my.addFixjoint(1, 4);
+	Scene.my.addFixjoint(3, 6);
+	
+	Scene.my.nextBodyID = Scene.my.nextBodyID + 1
+};
+Scene.my.tetris4 := { //J-type
+	Scene.my.addBlock(1, Scene.my.POS00, Scene.my.COLOR_OF_TETRIS_J, true);
+	Scene.my.addBlock(2, Scene.my.POS01, Scene.my.COLOR_OF_TETRIS_J, true);
+	Scene.my.addBlock(3, Scene.my.POS02, Scene.my.COLOR_OF_TETRIS_J, true);
+	Scene.my.addBlock(4, Scene.my.POS10, Scene.my.COLOR_OF_TETRIS_J, false);
+	Scene.my.addBlock(5, Scene.my.POS11, Scene.my.COLOR_OF_TETRIS_J, false);
+	Scene.my.addBlock(6, Scene.my.POS12, Scene.my.COLOR_OF_TETRIS_J, true);
+	Scene.my.addController(7, Scene.my.BLOCKSIZE * [3, 2], (Scene.my.POS01 + Scene.my.POS11)/2);
+	
+	Scene.my.addHinge(2, 7, [0.0, - Scene.my.BLOCKSIZE / 2], [0.0, 0.0]);
+	Scene.my.addFixjoint(1, 2);
+	Scene.my.addFixjoint(2, 3);
+	Scene.my.addFixjoint(3, 6);
+	Scene.my.addFixjoint(1, 4);
+	Scene.my.addFixjoint(2, 5);
+	
+	Scene.my.nextBodyID = Scene.my.nextBodyID + 1
+};
+Scene.my.tetris5 := { //L-type
+	Scene.my.addBlock(1, Scene.my.POS00, Scene.my.COLOR_OF_TETRIS_L, true);
+	Scene.my.addBlock(2, Scene.my.POS01, Scene.my.COLOR_OF_TETRIS_L, true);
+	Scene.my.addBlock(3, Scene.my.POS02, Scene.my.COLOR_OF_TETRIS_L, true);
+	Scene.my.addBlock(4, Scene.my.POS10, Scene.my.COLOR_OF_TETRIS_L, true);
+	Scene.my.addBlock(5, Scene.my.POS11, Scene.my.COLOR_OF_TETRIS_L, false);
+	Scene.my.addBlock(6, Scene.my.POS12, Scene.my.COLOR_OF_TETRIS_L, false);
+	Scene.my.addController(7, Scene.my.BLOCKSIZE * [3, 2], (Scene.my.POS01 + Scene.my.POS11)/2);
+	
+	Scene.my.addHinge(2, 7, [0.0, - Scene.my.BLOCKSIZE / 2], [0.0, 0.0]);
+	Scene.my.addFixjoint(1, 2);
+	Scene.my.addFixjoint(2, 3);
+	Scene.my.addFixjoint(1, 4);
+	Scene.my.addFixjoint(2, 5);
+	Scene.my.addFixjoint(3, 6);
+	
+	Scene.my.nextBodyID = Scene.my.nextBodyID + 1
+};
+Scene.my.tetris6 := { //T-type
+	Scene.my.addBlock(1, Scene.my.POS00, Scene.my.COLOR_OF_TETRIS_T, true);
+	Scene.my.addBlock(2, Scene.my.POS01, Scene.my.COLOR_OF_TETRIS_T, true);
+	Scene.my.addBlock(3, Scene.my.POS02, Scene.my.COLOR_OF_TETRIS_T, true);
+	Scene.my.addBlock(4, Scene.my.POS10, Scene.my.COLOR_OF_TETRIS_T, false);
+	Scene.my.addBlock(5, Scene.my.POS11, Scene.my.COLOR_OF_TETRIS_T, true);
+	Scene.my.addBlock(6, Scene.my.POS12, Scene.my.COLOR_OF_TETRIS_T, false);
+	Scene.my.addController(7, Scene.my.BLOCKSIZE * [3, 2], (Scene.my.POS01 + Scene.my.POS11)/2);
+	
+	Scene.my.addHinge(2, 7, [0.0, - Scene.my.BLOCKSIZE / 2], [0.0, 0.0]);
+	Scene.my.addFixjoint(1, 2);
+	Scene.my.addFixjoint(2, 3);
+	Scene.my.addFixjoint(2, 5);
+	Scene.my.addFixjoint(1, 4);
+	Scene.my.addFixjoint(3, 6);
+	
+	Scene.my.nextBodyID = Scene.my.nextBodyID + 1
+};
+Scene.my.tetris := (id)=>{Reflection.ExecuteCode("Scene.my.tetris" + id)};
+
+/* Mathematical Functions */
+Scene.my.abs := (x)=>{x > 0 ? x :  - x};
+Scene.my.floor := (x)=>{x >= 0 ? x - math.mod(x, 1) : (math.mod(x, 1) == 0 ? x : x - math.mod(x, 1) - 1)};
+Scene.my.rand__ := 1343201072;
+Scene.my.rand := {
+	Scene.my.rand__ = Scene.my.rand__ * 1103515245 + 12345;
+	(Scene.my.rand__ / 65536) % 32768
+};
+Scene.my.srand := (rand_seed)=>{Scene.my.rand__ = rand_seed};
+
+/* global variables */
+Scene.my.level := 1;
+Scene.my.removedLinesCount := 0;
+
+Scene.my.nextFlag := false;
+Scene.my.gameoverFlag := false;
+
+Scene.my.removeRow := 0;
+Scene.my.lineBlocksCount := 0;
+
+Scene.my.cameraRotateDegree := 0;
+
+Scene.my.nextBodyID := 10000;
+Scene.my.tetrisLandedNum = 0;
+Scene.my.tetrisNum = 0;
+Scene.my.nextTETRIS_ID := -1;
+
+Scene.my.nextTiming := 0.04;
+Scene.my.disableToMoveTiming := Scene.my.FALL_TIMELIMIT;
+
+/* onStep */
+Scene.my.onStep := ()=>{
+	time > Scene.my.nextTiming ? {
+		Scene.my.nextTiming = time + Scene.my.CHECKINGINTERVAL;
+		Scene.my.removeRow = (Scene.my.removeRow + 1) % Scene.my.MAX_ROW;
+		Scene.my.removeBlocksCheck(Scene.my.removeRow);
+		Scene.my.nextFlag ? {
+			Scene.my.nextTetris;
+			Scene.my.nextFlag = false;
+		} : {
+			Scene.my.gameoverFlag ? {
+				Scene.my.gameover;
+				Scene.my.gameoverFlag = false;
+			} : {
+			}
+		};
+	} : {};
+	
+	Scene.my.tetrisLandedNum == Scene.my.tetrisNum && time > Scene.my.disableToMoveTiming ? {
+		Scene.my.disableToMoveTiming = time + Scene.my.FALL_TIMELIMIT;
+		
+		Scene.addBox({
+			size := Scene.my.DISABLE_TO_MOVE_SIZE;
+			pos := [0, - Scene.my.MAX_ROW / 2] * Scene.my.BLOCKSIZE;
+			density := Scene.my.DISABLE_TO_MOVE_DENSITY;
+			
+			color := Scene.my.COLOR_FOR_IS_LANDED;
+			drawBorder := false;
+			opaqueBorders := false;
+			
+			immortal := false;
+			collideWater := false;
+			heteroCollide := true;
+			collideSet := Scene.my.disableToMove_COLLIDESET;
+			onCollide := (e)=>{}
+		});
+	} : {
+	};
+	
+	Scene.my.BACKGROUND_KILLER1_G + Scene.my.BACKGROUND_KILLER2_G;
+};
+
+/* onCollide functions */
+Scene.my.disableToMove := {
+	(e)=>{
+		(e.pos(1) < 0) ? { Scene.my.nextFlag = true} 
+		              : { Scene.my.gameoverFlag = true};
+		e.this.immortal = false;
+		e.this.collideSet = Scene.my.BACKGROUND_KILLER2_G;
+		e.this.onCollide = (e)=>{};
+	}
+};
+Scene.my.isLanded := {
+	(e)=>{
+		e.other.collideSet == Scene.my.disableToMove_COLLIDESET ? {e.this.collideSet = Scene.my.FALLING_BLOCKS_G + Scene.my.DEFAULT_G; e.this.onCollide = (e)=>{};}
+		                           : {
+			(Scene.my.tetrisLandedNum != Scene.my.tetrisNum && Scene.my.abs(e.normal(0)) < 0.9) ? {
+				Scene.my.disableToMoveTiming = time + Scene.my.DISABLE_TO_MOVE_TIME_INTERBAL;
+				Scene.my.tetrisLandedNum = Scene.my.tetrisNum;
+				e.this.onCollide = (e)=>{e.other.collideSet == Scene.my.disableToMove_COLLIDESET ? {e.this.collideSet = Scene.my.FALLING_BLOCKS_G + Scene.my.DEFAULT_G; e.this.onCollide = (e)=>{};} : {} }; 
+			} : { } 
+		}
+	}
+};
+
+Scene.my.cameraRotate := (degree__)=>{
+	Scene.my.cameraRotateDegree = Scene.my.cameraRotateDegree + degree__;
+};
+
+Scene.my.nextTETRIS_Text := "\n [START]";
+Scene.my.nextTETRIS_TextColor := [1,1,1,1];
+
+Scene.my.addCheckerBall := (row, col) =>{
+	Scene.addCircle{
+		color := Scene.my.CHECKINGBALL_COLOR;
+		drawBorder = false;
+		opaqueBorders = false;
+		
+		radius := Scene.my.CHECKINGBALL_SIZE;
+		pos := [(- (Scene.my.MAX_COL + 1) / 2 + 0.5 + col ) * Scene.my.BLOCKSIZE, (-Scene.my.MAX_ROW + 0.5 + row) * Scene.my.BLOCKSIZE];
+		
+		density := Scene.my.CHECKINGBALL_DENSITY;
+		
+		collideSet := Scene.my.CHECKER_COLLIDESET;
+		collideWater := false;
+		heterocollide := true;
+		onCollide := (e)=>{
+			e.other.color == Scene.my.FLOOR_COLOR ? {} : {
+				Scene.my.lineBlocksCount = Scene.my.lineBlocksCount + 1;
+				e.this.onCollide = (e)=>{};
+			};
+		}
+	};
+};
+Scene.my.removeBlocksCheck := (row)=>{
+	Scene.my.lineBlocksCount >= Scene.my.MAX_COL ? {
+		row == 0 ? {
+			Scene.my.removeBlocks(Scene.my.MAX_ROW - 1);
+		} : {
+			Scene.my.removeBlocks(row - 1);
+		}
+	} : {
+	};
+	Scene.my.lineBlocksCount = 0;
+	
+	//addCheckerBall
+	//NOTE: These circles collide with blocks _after_ 1 step, _and_then_ increase lineBlocksCount.
+	for(Scene.my.MAX_COL, (n)=>{Scene.my.addCheckerBall(row, n);});
+	Scene.my.cameraRotateDegree > 0.0 ? {
+		Scene.Camera.rotation = Scene.Camera.rotation + math.pi / 180 * 10 * Scene.my.CHECKINGINTERVAL;
+		Scene.my.cameraRotateDegree = Scene.my.cameraRotateDegree - 1.0 * 10 * Scene.my.CHECKINGINTERVAL;
+	} : { 
+	};
+};
+Scene.my.removeBlocks := (row)=>{
+	Scene.addBox({
+		color := [0,0,0,0];
+		pos := [0,  - (Scene.my.MAX_ROW - 0.5) * Scene.my.BLOCKSIZE + row * Scene.my.BLOCKSIZE];
+		size := Scene.my.REMOVEBLOCKSIZE;
+		
+		collideSet := Scene.my.DEFAULT_G + Scene.my.BACKGROUND_KILLER1_G;
+		killer := true
+	});
+	Scene.my.removedLinesCount = Scene.my.removedLinesCount + 1;
+	Scene.my.removedLinesCount >= (Scene.my.level * Scene.my.LINES_PER_LEVEL) ? {
+		Scene.my.levelUp;
+	} : {
+	};
+};
+Scene.my.levelUp := {
+	Scene.my.level = Scene.my.level + 1;
+	Scene.my.level <= 6 ? {Sim.gravityStrength = Scene.my.floor(Sim.gravityStrength + 2.5)} : {
+	Scene.my.level <= 12 ? {Sim.gravityStrength = 9.8; Scene.my.cameraRotate(30);} : {
+	Scene.my.level == 20 ? {
+		Scene.setFilter {
+			rest = true;
+			mask = Scene.my.DEBUG ? {
+				127 - Scene.my.BACKGROUND_KILLER1_G - Scene.my.BACKGROUND_KILLER2_G - Scene.my.FALLING_BLOCKS_G;
+			} : {
+				127 - Scene.my.BACKGROUND_KILLER1_G - Scene.my.BACKGROUND_KILLER2_G - Scene.my.CONTROLLER_G - Scene.my.FALLING_BLOCKS_G;
+			};
+		}
+	} : {
+		Sim.gravityStrength = Scene.my.floor(Sim.gravityStrength + 1.5);
+	}}};
+	Scene.addBox {
+		geomID = 48;
+		size = Scene.my.BLOCKSIZE * [4, 1];
+		
+		pos = [0.0, -2.0];
+		vel = [0.0, -1.0];
+		angle = 0.0;
+		angvel = 0.0;
+		
+		density = Scene.my.DENSITY_FOR_CONTROL;
+		friction = Scene.my.FRICTION;
+
+		color = [1.0, 1.0, 1.0, 0.0];
+		text = "LEVEL " + Scene.my.level;
+		textScale = 0.21 * Scene.my.BLOCKSIZE / 0.25;
+		textColor = [1.0, 0.0, 0.0, 1.0];
+		drawBorder = false;
+		opaqueBorders = true;
+
+		collideSet = Scene.my.SHOWING_LEVEL_G;
+		collideWater = false;
+		heteroCollide = true;
+		onCollide = (e)=>{
+			
+		};
+		zDepth = 10000.0;
+	};
+};
+
+Scene.my.nextInfo := () => {
+	Scene.my.nextTETRIS_Text = {
+		Scene.my.nextTETRIS_ID == 0 ? {"\n||||||||||||||||"} : { //I-type
+		Scene.my.nextTETRIS_ID == 1 ? {"    ||||||||    \n    ||||||||"} : { //O-type
+		Scene.my.nextTETRIS_ID == 2 ? {"    ||||||||    \n||||||||    "} : { //S-type
+		Scene.my.nextTETRIS_ID == 3 ? {"||||||||        \n    ||||||||"} : { //Z-type
+		Scene.my.nextTETRIS_ID == 4 ? {"||||||||||||    \n       ||||"} : { //J-type
+		Scene.my.nextTETRIS_ID == 5 ? {"||||||||||||    \n||||        "} : { //L-type
+		Scene.my.nextTETRIS_ID == 6 ? {"||||||||||||    \n    ||||    "} : { //T-type
+		"ERROR: GOT A BAD ID.";
+		}}}}}}}
+	};
+	Scene.my.nextTETRIS_TextColor = {
+		Scene.my.nextTETRIS_ID == 0 ? {Scene.my.COLOR_OF_TETRIS_I;} : { //I-type
+		Scene.my.nextTETRIS_ID == 1 ? {Scene.my.COLOR_OF_TETRIS_O;} : { //O-type
+		Scene.my.nextTETRIS_ID == 2 ? {Scene.my.COLOR_OF_TETRIS_S;} : { //S-type
+		Scene.my.nextTETRIS_ID == 3 ? {Scene.my.COLOR_OF_TETRIS_Z;} : { //Z-type
+		Scene.my.nextTETRIS_ID == 4 ? {Scene.my.COLOR_OF_TETRIS_J;} : { //J-type
+		Scene.my.nextTETRIS_ID == 5 ? {Scene.my.COLOR_OF_TETRIS_L;} : { //L-type
+		Scene.my.nextTETRIS_ID == 6 ? {Scene.my.COLOR_OF_TETRIS_T;} : { //T-type
+			[1,1,1,1];
+		}}}}}}}
+	};
+};
+
+Scene.my.nextTetris := {
+	//App.Step;
+	Scene.my.tetris(Scene.my.nextTETRIS_ID);
+	Scene.my.nextTETRIS_ID = (Scene.my.abs(Scene.my.rand) + Scene.my.floor(System.time * 61880)) % 7;
+	Scene.my.nextInfo;
+	Scene.my.tetrisNum = Scene.my.tetrisNum + 1;
+};
+Scene.my.gameover := {
+	Scene.my.onStep = ()=>{0};
+	Scene.my.removeBlocksCheck = (__)=>{};
+	
+	Scene.addBox({
+		color := [0, 0, 0, 1];
+		collideWater = false;
+		collideSet := Scene.my.FALLING_BLOCKS_G + Scene.my.BACKGROUND_KILLER1_G + Scene.my.BACKGROUND_KILLER2_G;
+		heteroCollide = true;
+		pos := [0,  - 2 * Scene.my.MAX_ROW * Scene.my.BLOCKSIZE];
+		size := [10, 1];
+		killer := true;
+		onCollide := (e)=>{
+			e.other.collideSet == (Scene.my.DEFAULT_G + Scene.my.FALLING_BLOCKS_G + Scene.my.BACKGROUND_KILLER1_G) ? {
+				e.other.immortal = false;
+			} : {};
+			Scene.addBox({
+				color := [0, 0, 0, 1];
+				collideSet := Scene.my.FALLING_BLOCKS_G + Scene.my.BACKGROUND_KILLER1_G;
+				pos := [0,  - 2 * Scene.my.MAX_ROW * Scene.my.BLOCKSIZE];
+				size := [1, 1];
+				killer := true;
+			});
+		};
+	});
+	Scene.addBox({
+		zDepth = 100000.0;
+		opaqueBorders = true;
+		size = Scene.my.BLOCKSIZE * [4, 1];
+		vel = [0.0, -1.0];
+		collideWater = false;
+		density = Scene.my.DENSITY_FOR_CONTROL;
+		angvel = 0.0;
+		friction = Scene.my.FRICTION;
+		textScale = 0.19 * Scene.my.BLOCKSIZE / 0.25;
+		geomID = 48;
+		textColor = [1.0, 1.0, 1.0, 1.0];
+		pos = [0.0, -Scene.my.MAX_ROW * Scene.my.BLOCKSIZE / 2];
+		text = "GAME OVER";
+		color = [0.0, 0.0, 0.0, 1.0];
+		drawBorder = true;
+		onCollide = (e)=>{
+			
+		};
+		heteroCollide = true;
+		angle = 0.0;
+		collideSet = Scene.my.EMPTYBLOCK_G;
+		killer = true;
+	});
+	Scene.addBox({ //upper-side
+		zDepth = 100000.0;
+		opaqueBorders = true;
+		size = Scene.my.BLOCKSIZE * [4, 1];
+		vel = [0.0, 0.0];
+		collideWater = false;
+		density = Scene.my.DENSITY_FOR_CONTROL;
+		angvel = 0.0;
+		friction = Scene.my.FRICTION;
+		textScale = 0.19 * Scene.my.BLOCKSIZE / 0.25;
+		geomID = 48;
+		textColor = [1.0, 1.0, 1.0, 1.0];
+		pos = [0.0, 10 * Scene.my.BLOCKSIZE];
+		text = "GAME OVER";
+		color = [0.0, 0.0, 0.0, 1.0];
+		drawBorder = true;
+		onCollide = (e)=>{
+			
+		};
+		heteroCollide = false;
+		angle = 0.0;
+		collideSet = Scene.my.EMPTYBLOCK_G;  //F
+		killer = true;
+		body = 0;
+	});
+};
+
+Sim.airSwitch ? {
+} : {
+	App.Step; Scene.my.nextTETRIS_ID = Scene.my.abs(Scene.my.rand + Scene.my.floor(System.time * 61880)) % 7 ;  Scene.my.nextTetris;
+};
+
+/* STAGE-SETTING */
+Scene.addPlane {  //Ceiling (killer for LEVEL_PANEL)
+	friction = Scene.my.FRICTION;
+	killer = true;
+	entityID = 132;
+	pos = [0.0, 0.0];
+	angle = -1.5707967;
+	opaqueBorders = true;
+	body = 0;
+	zDepth = -3.0;
+	collideSet = Scene.my.SHOWING_LEVEL_G;
+	geomID = 175;
+	color = [0.75, 0.0, 0.0, 1.0];
+	drawBorder = true
+};
+Scene.addPlane {  //Ceiling
+	friction = Scene.my.FRICTION;
+	killer = false;
+	entityID = 132;
+	pos = [0.0, 7 * Scene.my.BLOCKSIZE];
+	angle = -1.5707967;
+	opaqueBorders = true;
+	body = 0;
+	zDepth = -2.0;
+	collideSet = Scene.my.FALLING_BLOCKS_G + Scene.my.CONTROLLER_G;
+	geomID = 175;
+	color = [0.5, 0.5, 0.5, 1.0];
+	drawBorder = true
+};
+Scene.addPlane {  //Background killer
+	immortal = true;
+	entityID = 133;
+	killer = true;
+	pos = [0.0, 7 * Scene.my.BLOCKSIZE];
+	angle = math.pi / 2;
+	opaqueBorders = true;
+	body = 0;
+	zDepth = -10.0;
+	collideSet = {Scene.my.onStep};
+	geomID = 176;
+	color = [0.5, 1.0, 1.0, 0.25];
+	drawBorder = true
+};
+
+Scene.addPlane { //edge of the Phun world (bottom).
+	entityID = 138;
+	killer = true;
+	pos = [0.0, -5 * Scene.my.MAX_ROW * Scene.my.BLOCKSIZE];
+	angle = 1.5707964;
+	opaqueBorders = true;
+	body = 0;
+	zDepth = 1.0;
+	collideSet = 127;
+	geomID = 181;
+	color = [0.1, 0.1, 0.1, 1.0];
+	drawBorder = true
+};
+
+Scene.addPlane {  //Left
+	immortal = true;
+	geomID = 185;
+	friction = Scene.my.FRICTION;
+	entityID = 142;
+	pos = [ -((Scene.my.MAX_COL + 1) / 2 + Scene.my.GAP_FOR_WIDTH) * Scene.my.BLOCKSIZE, 0.0];
+	angle = 0.0;
+	opaqueBorders = true;
+	body = 0;
+	zDepth = 2.0;
+	collideWater = false;
+	collideSet := Scene.my.DEFAULT_G + Scene.my.FALLING_BLOCKS_G;
+	heteroCollide = true;
+	color = [0.0, 0.5, 0.5, 1];
+	drawBorder = true
+};
+
+// Scene.my.blockNum := 1..Scene.my.MAX_ROW;
+// for(Scene.my.MAX_ROW, (row__)=>{
+	// Scene.addBox {
+		// body = 0;
+		// geomID = 1000 + row__;
+		// size = Scene.my.BLOCKSIZE * [1, 1];
+		
+		// pos = [-((Scene.my.MAX_COL + 1) / 2 + Scene.my.GAP_FOR_WIDTH + 0.5) , -Scene.my.MAX_ROW + row__ + 0.5] * Scene.my.BLOCKSIZE;
+		// vel = [0.0, -1.0];
+		// angle = 0.0;
+		// angvel = 0.0;
+		
+		// density = Scene.my.DENSITY_FOR_CONTROL;
+		// friction = Scene.my.FRICTION;
+
+		// color = [1.0, 1.0, 1.0, 1.0];
+		
+		// text = {"" + Scene.my.blockNum(row__)};
+		// textScale = 0.21 * Scene.my.BLOCKSIZE / 0.25;
+		// textColor = [1.0, 0.0, 0.0, 1.0];
+		// drawBorder = true;
+		// opaqueBorders = true;
+
+		// collideSet = Scene.my.SHOWING_LEVEL_G;
+		// collideWater = false;
+		// heteroCollide = true; 
+		// zDepth = 10000.0;
+	// };
+// });
+Scene.addPlane {    //Right
+	immortal = true;
+	geomID = 186;
+	friction = Scene.my.FRICTION;
+	entityID = 143;
+	pos = [ (Scene.my.MAX_COL / 2 + Scene.my.GAP_FOR_WIDTH) * Scene.my.BLOCKSIZE, 0.0];
+	angle = math.pi;
+	opaqueBorders = true;
+	body = 0;
+	zDepth = 2.0;
+	collideWater = false;
+	collideSet := Scene.my.DEFAULT_G + Scene.my.FALLING_BLOCKS_G;
+	heteroCollide = true;
+	color = [0.0, 0.5, 0.5, 1];
+	drawBorder = true
+};
+Scene.addBox {      //ruler(Right-side)
+	immortal = true;
+	ruler = true;
+	size = [Scene.my.MAX_ROW * Scene.my.BLOCKSIZE, Scene.my.BLOCKSIZE];
+	vel = [0.0, 0.0];
+	angvel = 0.0;
+	pos = [(Scene.my.MAX_COL / 2 + 0.5 + Scene.my.GAP_FOR_WIDTH) * Scene.my.BLOCKSIZE, -Scene.my.MAX_ROW * Scene.my.BLOCKSIZE / 2];
+	geomID = 193;
+	entityID = 150;
+	color = [0.25, 0.25, 0.25, 1.0];
+	collideSet = 0;
+	body = 0;
+	zDepth = 2.0;
+	angle = math.pi / 2;
+	drawBorder = true;
+	opaqueBorders = true;
+};
+Scene.addFixjoint({ //ruler-right-fixjoint
+	color = Scene.my.FIXJOINT_COLOR;
+	geom0 = 186;
+	geom1 = 193;
+	geom0pos = [0.0, 0.0];
+	geom1pos = [0.0, 0.0];
+});
+Scene.addGroup {    //ruler-right-group
+	entityIDs = [143, 150];
+	name = "fuler-Right"
+};
+
+Scene.addPlane {    //floor
+	immortal = true;
+	body = 0;
+	geomID = 184;
+	entityID = 141;
+	
+	pos = Scene.my.BLOCKSIZE * [ 0.0, -Scene.my.MAX_ROW];
+	angle = math.pi / 2;
+	friction = Scene.my.FRICTION;
+	
+	collideSet = Scene.my.CHECKER_COLLIDESET + Scene.my.FALLING_BLOCKS_G;
+	collideWater = false;
+	heterocollide = true;
+	
+	color = Scene.my.FLOOR_COLOR;
+	drawBorder = true;
+	opaqueBorders = true;
+	zDepth = 1.0;
+};
+Scene.addBox {      //ruler(bottom-side)
+	ruler = true;
+	body = 0;
+	geomID = 192;
+	entityID = 149;
+	
+	size = Scene.my.BLOCKSIZE * [ Scene.my.MAX_COL, 1];
+	pos = Scene.my.BLOCKSIZE * [ -(Scene.my.MAX_COL % 2 / 2.0), -(Scene.my.MAX_ROW + 0.5)];
+	vel = [0.0, 0.0];
+	angle = 0.0;
+	angvel = 0.0;
+	
+	color = [0.25, 0.25, 0.25, 1.0];
+	drawBorder = true;
+	opaqueBorders = true;
+	
+	collideSet = 0;
+	zDepth = 1.0;
+};
+Scene.addFixjoint({ //fuler-floor-fixjoint
+	color = Scene.my.FIXJOINT_COLOR;
+	geom0 = 184;
+	geom1 = 192;
+	geom0pos = [0.0, 0.0];
+	geom1pos = [0.0, 0.0];
+});
+Scene.addGroup {    //fuler-floor-group
+	entityIDs = [141, 149];
+	name = "fuler-floor"
+};
+
+Scene.addBox { //Show next tetris
+	body = 0;
+	geomID = 190;
+	entityID = 147;
+	
+	text = {Scene.my.nextTETRIS_Text};
+	textscale = Scene.my.BLOCKSIZE * 0.95;
+	textcolor = {Scene.my.nextTETRIS_TextColor};
+	
+	size = [4, 2] * Scene.my.BLOCKSIZE;
+	pos = (Scene.my.POS01 + Scene.my.POS12) / 2;
+	vel = [0.0, -1.0];
+	angle = 0.0;
+	
+	color = [0.5, 0.5, 0.5, 0.75];
+	drawBorder = false;
+	opaqueBorders = false;
+	
+	collideSet = 0;
+	collideWater = false;
+	
+	zDepth = 0.0;
+};
+
+/* onStart */
+Scene.my.nextTETRIS_ID = Scene.my.abs(Scene.my.rand + Scene.my.floor(System.time * 61880)) % 7;
+Scene.my.nextInfo;
+
+Sim.airSwitch ? {
+	Scene.addBox { //Starting block (I-type)
+		zDepth = 2.0;
+		opaqueBorders = true;
+		size = Scene.my.BLOCKSIZE * [4, 1];
+		vel = [0.0, -1.0];
+		collideWater = false;
+		density = Scene.my.DENSITY_FOR_CONTROL;
+		angvel = 4.9;  //with rotating
+		friction = Scene.my.FRICTION;
+		geomID = 190;
+		pos = [0.0, -Scene.my.MAX_ROW * Scene.my.BLOCKSIZE / 2];
+		entityID = 147;
+		color = [1.0, 1.0, 1.0, 0.0];
+		drawBorder = true;
+		onCollide = (e)=>{
+			Scene.my.nextTetris;
+			e.this.collideSet = Scene.my.BACKGROUND_KILLER1_G;
+			e.this.onCollide = (e)=>{}
+		};
+		heteroCollide = true;
+		angle = 0.0;
+		collideSet = Scene.my.FALLING_BLOCKS_G;
+	};
+} : {};

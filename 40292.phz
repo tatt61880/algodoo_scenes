@@ -1,0 +1,77 @@
+
+FileInfo -> {
+    title = ""; // scene for Phun v5.28
+    version = 4
+};
+
+//Circles
+Scene.addCircle {
+    color = [1.0, 0.0, 0.0, 1.0]; //red
+    radius = 1.5;
+
+    geomID = 18; //geom0 for hinge
+
+    collideSet = 0
+};
+Scene.addCircle {
+    color = [0.0, 1.0, 0.0, 1.0]; //green
+    radius = 1.0;
+
+    geomID = 2;
+
+    collideSet = 0
+};
+Scene.addCircle {
+    color = [0.0, 0.0, 1.0, 1.0]; //blue
+    radius = 0.6;
+
+    geomID = 2500; //geom1 for hinge
+
+    collideSet = 0
+};
+
+//Boxes
+Scene.addBox {
+    color = [1.0, 0.0, 0.0, 1.0]; // red
+    size = [3.0, 3.0];
+    pos = [5.0, 0.0];
+
+    geomID = 4;
+
+    collideSet = 0
+};
+Scene.addBox {
+    color = [0.0, 1.0, 0.0, 1.0]; // green
+    size = [2.0, 2.0];
+    pos = [5.0, 0.0];
+
+    geomID = 5;
+
+    radius = 1.0;
+    entityID = 22;
+    collideSet = 0
+};
+Scene.addBox {
+    color = [0.0, 0.0, 1.0, 1.0]; // blue
+    size = [1.0, 1.0];
+    pos = [5.0, 0.0];
+
+    geomID = 6;
+
+    radius = 0.8;
+    entityID = 21;
+    collideSet = 0
+};
+
+//Hinge
+Scene.addHinge {
+    geom0 = 18;
+    geom1 = 2500;
+    geom0pos = [0.0, 0.0];
+    geom1pos = [0.0, 0.0];
+
+    color = [0.5, 0.5, 0.5, 1.0]; // gray
+};
+
+
+
